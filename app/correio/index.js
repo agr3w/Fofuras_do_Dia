@@ -11,13 +11,13 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
 } from "react-native";
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DecorationRow from "../../components/DecorationRow";
 import FofoCard from "../../components/FofoCard";

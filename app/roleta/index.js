@@ -10,7 +10,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   Animated,
   Modal,
@@ -18,6 +17,7 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../../services/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { readCache, STORAGE_KEYS } from '../../services/syncService';

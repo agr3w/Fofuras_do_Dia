@@ -10,7 +10,7 @@
 // ============================================================
 
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+import { getFirestore } from "firebase/firestore";
 
 // Lê as variáveis de ambiente (prefixo EXPO_PUBLIC_ é exposto automaticamente pelo Expo)
 const firebaseConfig = {
@@ -31,12 +31,9 @@ const firebaseConfig = {
 // Evita reinicializar o app se o módulo for recarregado (hot reload)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Instância do Firestore com persistência local (cache no disco)
-// Permite leitura de dados mesmo sem conexão à internet
-const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager(),
-  }),
-});
+// Instância do Firestore (banco de dados)
+// Como o React Native não suporta IndexedDB, usamos o cache padrão de memória.
+// A nossa persistência offline é garantida pelo AsyncStorage (syncService).
+const db = getFirestore(app);
 
 export { app, db };

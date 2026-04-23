@@ -13,10 +13,10 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../services/firebase';
 import { collection, doc, addDoc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import FofoCard from '../components/FofoCard';
