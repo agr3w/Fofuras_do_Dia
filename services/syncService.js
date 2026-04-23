@@ -13,15 +13,15 @@
 //    '@lastSync'  → ISO timestamp da última sincronização
 // ============================================================
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { db } from './firebase';
-import { collection, getDocs, getDocsFromServer } from 'firebase/firestore';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { collection, getDocsFromServer } from "firebase/firestore";
+import { db } from "./firebase";
 
 // ── Chaves de armazenamento ────────────────────────────────
 export const STORAGE_KEYS = {
-  MESSAGES: '@messages',
-  COUPONS:  '@coupons',
-  LAST_SYNC: '@lastSync',
+  MESSAGES: "@messages",
+  COUPONS: "@coupons",
+  LAST_SYNC: "@lastSync",
 };
 
 // ── Lê array do AsyncStorage com fallback para [] ─────────
@@ -54,8 +54,8 @@ export async function syncData() {
   try {
     // Busca forçando o servidor (ignora cache do Firestore)
     const [messagesSnap, couponsSnap] = await Promise.all([
-      getDocsFromServer(collection(db, 'messages')),
-      getDocsFromServer(collection(db, 'coupons')),
+      getDocsFromServer(collection(db, "messages")),
+      getDocsFromServer(collection(db, "coupons")),
     ]);
 
     const messages = messagesSnap.docs.map((doc) => ({
@@ -73,17 +73,17 @@ export async function syncData() {
 
     await Promise.all([
       writeCache(STORAGE_KEYS.MESSAGES, messages),
-      writeCache(STORAGE_KEYS.COUPONS,  coupons),
+      writeCache(STORAGE_KEYS.COUPONS, coupons),
       writeCache(STORAGE_KEYS.LAST_SYNC, new Date().toISOString()),
     ]);
 
     console.log(
-      `[Sync] ✅ Sincronizado: ${messages.length} mensagens, ${coupons.length} cupões.`
+      `[Sync] ✅ Sincronizado: ${messages.length} mensagens, ${coupons.length} cupões.`,
     );
     return true;
   } catch (error) {
     // Dispositivo offline ou Firebase não configurado — falha silenciosa
-    console.log('[Sync] 📴 Offline ou erro:', error.message);
+    console.log("[Sync] 📴 Offline ou erro:", error.message);
     return false;
   }
 }

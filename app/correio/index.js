@@ -5,39 +5,39 @@
 //  enquanto não há conexão ou mensagem cadastrada.
 // ============================================================
 
-import React, { useEffect, useState, useRef } from 'react';
+import { collection, getDocs } from "firebase/firestore";
+import { useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Animated,
   ActivityIndicator,
-  SafeAreaView,
+  Animated,
   Dimensions,
-} from 'react-native';
-import { db } from '../../services/firebase';
-import { collection, getDocs } from 'firebase/firestore';
-import { readCache, STORAGE_KEYS } from '../../services/syncService';
-import DecorationRow from '../../components/DecorationRow';
-import FofoCard from '../../components/FofoCard';
-import { colors, spacing, borderRadius, shadows, typography } from '../../theme/theme';
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import DecorationRow from "../../components/DecorationRow";
+import FofoCard from "../../components/FofoCard";
+import { db } from "../../services/firebase";
+import { readCache, STORAGE_KEYS } from "../../services/syncService";
+import { borderRadius, colors, shadows, spacing } from "../../theme/theme";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
 // Retorna a data de hoje no formato "YYYY-MM-DD"
 function getTodayString() {
   const now = new Date();
   const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
 // Mensagem placeholder quando não há nada no Firestore
 const PLACEHOLDER_MESSAGE = {
-  text: 'Ei, Rana! 🌸\n\nAinda não há uma cartinha para hoje, mas saiba que você é a coisa mais fofa e especial do universo. 💕\n\nVolta amanhã pra ver sua surpresa! 🐸🧸',
-  sender: 'Com todo o amor do mundo 💌',
+  text: "Ei, Rana! 🌸\n\nAinda não há uma cartinha para hoje, mas saiba que você é a coisa mais fofa e especial do universo. 💕\n\nVolta amanhã pra ver sua surpresa! 🐸🧸",
+  sender: "Com todo o amor do mundo 💌",
 };
 
 export default function CorreioScreen() {
@@ -87,8 +87,11 @@ export default function CorreioScreen() {
       }
 
       // 2ª tentativa: Firestore (online fallback)
-      const snap = await getDocs(collection(db, 'messages'));
-      const allMessages = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const snap = await getDocs(collection(db, "messages"));
+      const allMessages = snap.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
       const todayMsg = allMessages.find((m) => m.unlockDate === today);
 
       if (todayMsg) {
@@ -99,7 +102,7 @@ export default function CorreioScreen() {
         setIsPlaceholder(true);
       }
     } catch (error) {
-      console.warn('[Correio] Erro ao carregar mensagem:', error.message);
+      console.warn("[Correio] Erro ao carregar mensagem:", error.message);
       setMessage(PLACEHOLDER_MESSAGE);
       setIsPlaceholder(true);
     } finally {
@@ -115,7 +118,7 @@ export default function CorreioScreen() {
       >
         {/* Decoração do topo */}
         <DecorationRow
-          emojis={['💌', '🌸', '💕', '🌸', '💌']}
+          emojis={["💌", "🌸", "💕", "🌸", "💌"]}
           fontSize={28}
           style={styles.topDecoration}
         />
@@ -135,10 +138,10 @@ export default function CorreioScreen() {
             <Text style={styles.letterTopEmoji}>💌</Text>
             <Text style={styles.letterTopTitle}>Uma cartinha pra Rana</Text>
             <Text style={styles.letterDate}>
-              {new Date().toLocaleDateString('pt-BR', {
-                weekday: 'long',
-                day: 'numeric',
-                month: 'long',
+              {new Date().toLocaleDateString("pt-BR", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
               })}
             </Text>
           </View>
@@ -168,7 +171,7 @@ export default function CorreioScreen() {
                 {/* Assinatura */}
                 <View style={styles.signatureContainer}>
                   <Text style={styles.signatureText}>
-                    {message?.sender ?? 'Com amor 💕'}
+                    {message?.sender ?? "Com amor 💕"}
                   </Text>
                   <Text style={styles.signatureEmoji}>🐸🧸</Text>
                 </View>
@@ -188,7 +191,7 @@ export default function CorreioScreen() {
 
         {/* Decorações do fundo */}
         <DecorationRow
-          emojis={['🐸', '💕', '🧸', '💕', '🐸']}
+          emojis={["🐸", "💕", "🧸", "💕", "🐸"]}
           fontSize={24}
           style={styles.bottomDecoration}
         />
@@ -215,7 +218,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardPink,
   },
   scrollContent: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.xxl,
@@ -232,7 +235,7 @@ const styles = StyleSheet.create({
   letterWrapper: {
     width: width - spacing.lg * 2,
     borderRadius: borderRadius.xl,
-    overflow: 'hidden',
+    overflow: "hidden",
     backgroundColor: colors.white,
     borderWidth: 2,
     borderColor: colors.envelopeBorder,
@@ -240,7 +243,7 @@ const styles = StyleSheet.create({
   },
   letterTop: {
     backgroundColor: colors.primaryAccent,
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
     borderBottomWidth: 2,
@@ -252,25 +255,25 @@ const styles = StyleSheet.create({
   },
   letterTopTitle: {
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: "800",
     color: colors.white,
-    textShadowColor: 'rgba(0,0,0,0.15)',
+    textShadowColor: "rgba(0,0,0,0.15)",
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
   },
   letterDate: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.85)',
+    color: "rgba(255,255,255,0.85)",
     marginTop: 4,
-    fontStyle: 'italic',
-    textTransform: 'capitalize',
+    fontStyle: "italic",
+    textTransform: "capitalize",
   },
 
   letterBody: {
     padding: spacing.xl,
     backgroundColor: colors.envelopeYellow,
     minHeight: 260,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
 
   paperLine: {
@@ -282,14 +285,14 @@ const styles = StyleSheet.create({
 
   // Loading
   loadingContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: spacing.xl,
     gap: spacing.md,
   },
   loadingText: {
     fontSize: 15,
     color: colors.textMedium,
-    fontStyle: 'italic',
+    fontStyle: "italic",
   },
 
   // Mensagem
@@ -297,22 +300,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 26,
     color: colors.textDark,
-    textAlign: 'center',
-    fontStyle: 'italic',
+    textAlign: "center",
+    fontStyle: "italic",
     paddingHorizontal: spacing.sm,
   },
 
   // Assinatura
   signatureContainer: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
     marginTop: spacing.lg,
     gap: 4,
   },
   signatureText: {
     fontSize: 14,
     color: colors.textMedium,
-    fontStyle: 'italic',
-    fontWeight: '600',
+    fontStyle: "italic",
+    fontWeight: "600",
   },
   signatureEmoji: {
     fontSize: 22,
@@ -323,15 +326,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bearLight,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    alignItems: 'center',
+    alignItems: "center",
     borderTopWidth: 1,
     borderTopColor: colors.envelopeBorder,
   },
   placeholderText: {
     fontSize: 12,
     color: colors.textMedium,
-    fontStyle: 'italic',
-    textAlign: 'center',
+    fontStyle: "italic",
+    textAlign: "center",
   },
 
   // Bônus
@@ -341,16 +344,16 @@ const styles = StyleSheet.create({
   },
   bonusTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.textMedium,
     marginBottom: 6,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 1,
   },
   bonusText: {
     fontSize: 15,
     lineHeight: 22,
     color: colors.textDark,
-    fontStyle: 'italic',
+    fontStyle: "italic",
   },
 });
