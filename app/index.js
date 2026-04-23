@@ -23,7 +23,8 @@ import { useRouter } from 'expo-router';
 import DecorationRow from '../components/DecorationRow';
 import FofoCard from '../components/FofoCard';
 import { colors, spacing, borderRadius, shadows, typography } from '../theme/theme';
-import { syncData } from '../services/syncService';
+import { readCache, STORAGE_KEYS, syncData } from '../services/syncService';
+import { requestPermissionsAsync, scheduleDailyNotification } from '../services/notificationService';
 
 const { width } = Dimensions.get('window');
 
@@ -45,10 +46,27 @@ export default function HomeScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Sincroniza silenciosamente em background (offline-first)
-    // Se a Rana tiver internet, baixa novidades para o cache.
-    // Se estiver offline, o syncData falha silenciosamente.
-    syncData();
+    async function initApp() {
+      // 1. Pede permissão de notificações
+      const hasPermission = await requestPermissionsAsync();
+
+      // 2. Sincroniza silenciosamente em background (offline-first)
+      await syncData();
+
+      // 3. Se tiver permissão, lê as configs e agenda a notificação
+      if (hasPermission) {
+        const settings = await readCache(STORAGE_KEYS.SETTINGS);
+        if (settings && settings.notificationHour !== undefined) {
+          await scheduleDailyNotification(
+            settings.notificationHour,
+            settings.notificationMinute,
+            settings.notificationMessage
+          );
+        }
+      }
+    }
+
+    initApp();
 
     // Entrada suave
     Animated.parallel([

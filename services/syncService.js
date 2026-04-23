@@ -21,6 +21,7 @@ import { db } from "./firebase";
 export const STORAGE_KEYS = {
   MESSAGES: "@messages",
   COUPONS: "@coupons",
+  SETTINGS: "@settings",
   LAST_SYNC: "@lastSync",
 };
 
@@ -53,9 +54,10 @@ async function writeCache(key, data) {
 export async function syncData() {
   try {
     // Busca forçando o servidor (ignora cache do Firestore)
-    const [messagesSnap, couponsSnap] = await Promise.all([
+    const [messagesSnap, couponsSnap, settingsSnap] = await Promise.all([
       getDocsFromServer(collection(db, "messages")),
       getDocsFromServer(collection(db, "coupons")),
+      getDocsFromServer(collection(db, "settings")),
     ]);
 
     const messages = messagesSnap.docs.map((doc) => ({
@@ -71,9 +73,16 @@ export async function syncData() {
       createdAt: doc.data().createdAt?.toDate?.()?.toISOString() ?? null,
     }));
 
+    let settings = null;
+    const configDoc = settingsSnap.docs.find(doc => doc.id === "config");
+    if (configDoc) {
+      settings = configDoc.data();
+    }
+
     await Promise.all([
       writeCache(STORAGE_KEYS.MESSAGES, messages),
       writeCache(STORAGE_KEYS.COUPONS, coupons),
+      writeCache(STORAGE_KEYS.SETTINGS, settings),
       writeCache(STORAGE_KEYS.LAST_SYNC, new Date().toISOString()),
     ]);
 

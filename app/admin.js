@@ -18,7 +18,7 @@ import {
   Platform,
 } from 'react-native';
 import { db } from '../services/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, addDoc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import FofoCard from '../components/FofoCard';
 import { colors, spacing, borderRadius, shadows } from '../theme/theme';
 
@@ -26,6 +26,7 @@ import { colors, spacing, borderRadius, shadows } from '../theme/theme';
 const TABS = [
   { key: 'cartinha', label: '💌 Nova Cartinha' },
   { key: 'mimo',     label: '🎁 Novo Mimo' },
+  { key: 'settings', label: '⚙️ Configurações' },
 ];
 
 export default function AdminScreen() {
@@ -41,6 +42,30 @@ export default function AdminScreen() {
   const [couponTitle, setCouponTitle]   = useState('');
   const [couponDesc,  setCouponDesc]    = useState('');
   const [loadingCoup, setLoadingCoup]   = useState(false);
+
+  // Estado: aba Configurações
+  const [notifHour, setNotifHour]       = useState('09');
+  const [notifMinute, setNotifMinute]   = useState('00');
+  const [notifMsg, setNotifMsg]         = useState('Ei Rana, tem cartinha nova pra você! 🌸');
+  const [loadingSettings, setLoadingSettings] = useState(false);
+
+  // Carregar configurações atuais
+  React.useEffect(() => {
+    async function loadSettings() {
+      try {
+        const configSnap = await getDoc(doc(db, 'settings', 'config'));
+        if (configSnap.exists()) {
+          const data = configSnap.data();
+          if (data.notificationHour) setNotifHour(data.notificationHour.toString().padStart(2, '0'));
+          if (data.notificationMinute) setNotifMinute(data.notificationMinute.toString().padStart(2, '0'));
+          if (data.notificationMessage) setNotifMsg(data.notificationMessage);
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar settings:', e);
+      }
+    }
+    loadSettings();
+  }, []);
 
   // ── Helpers de data
   const handleDateChange = (text) => {
@@ -109,6 +134,28 @@ export default function AdminScreen() {
       Alert.alert('❌ Erro', `Não foi possível salvar o cupão.\n\n${e.message}`);
     } finally {
       setLoadingCoup(false);
+    }
+  };
+
+  // ── Salvar Configurações
+  const handleSaveSettings = async () => {
+    if (!notifHour || !notifMinute || !notifMsg) {
+      Alert.alert('⚙️ Ops!', 'Preencha todos os campos da notificação!');
+      return;
+    }
+    setLoadingSettings(true);
+    try {
+      await setDoc(doc(db, 'settings', 'config'), {
+        notificationHour: parseInt(notifHour, 10),
+        notificationMinute: parseInt(notifMinute, 10),
+        notificationMessage: notifMsg.trim(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      Alert.alert('✅ Configurações salvas!', 'As notificações foram atualizadas.');
+    } catch (e) {
+      Alert.alert('❌ Erro ao salvar', `Verifique sua conexão e o Firebase.\n\n${e.message}`);
+    } finally {
+      setLoadingSettings(false);
     }
   };
 
@@ -274,6 +321,71 @@ export default function AdminScreen() {
                   {'• title (string)\n• description (string)\n• createdAt (timestamp)'}
                 </Text>
               </FofoCard>
+            </>
+          )}
+
+          {/* ── ABA: CONFIGURAÇÕES ── */}
+          {activeTab === 'settings' && (
+            <>
+              <View style={styles.cardWrapper}>
+                <Text style={styles.cardEmoji}>⚙️</Text>
+                <Text style={styles.cardTitle}>Configurações</Text>
+                <Text style={styles.cardSubtitle}>Horário e mensagem das notificações.</Text>
+
+                {/* Horário */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Horário da Notificação</Text>
+                  <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                    <TextInput
+                      style={[styles.input, { flex: 1, textAlign: 'center' }]}
+                      placeholder="HH"
+                      value={notifHour}
+                      onChangeText={setNotifHour}
+                      keyboardType="numeric"
+                      maxLength={2}
+                    />
+                    <Text style={{ fontSize: 24, alignSelf: 'center', color: colors.textDark }}>:</Text>
+                    <TextInput
+                      style={[styles.input, { flex: 1, textAlign: 'center' }]}
+                      placeholder="MM"
+                      value={notifMinute}
+                      onChangeText={setNotifMinute}
+                      keyboardType="numeric"
+                      maxLength={2}
+                    />
+                  </View>
+                </View>
+
+                {/* Mensagem da Notificação */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Mensagem (Texto do push)</Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    placeholder="Mensagem da notificação..."
+                    value={notifMsg}
+                    onChangeText={setNotifMsg}
+                    multiline
+                    numberOfLines={2}
+                  />
+                </View>
+
+                {/* Botão de salvar configurações */}
+                <TouchableOpacity
+                  style={[styles.submitButton, { backgroundColor: colors.successMint }]}
+                  onPress={handleSaveSettings}
+                  disabled={loadingSettings}
+                  activeOpacity={0.85}
+                >
+                  {loadingSettings ? (
+                    <ActivityIndicator color={colors.textDark} />
+                  ) : (
+                    <>
+                      <Text style={[styles.submitButtonText, { color: colors.textDark }]}>Salvar Configurações</Text>
+                      <Text style={styles.submitButtonEmoji}>✨</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
             </>
           )}
         </ScrollView>

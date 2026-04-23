@@ -16,7 +16,9 @@ import {
   StyleSheet,
   Text,
   View,
+  TouchableOpacity,
 } from "react-native";
+import { Ionicons } from '@expo/vector-icons';
 import DecorationRow from "../../components/DecorationRow";
 import FofoCard from "../../components/FofoCard";
 import { db } from "../../services/firebase";
@@ -41,13 +43,16 @@ const PLACEHOLDER_MESSAGE = {
 };
 
 export default function CorreioScreen() {
-  const [message, setMessage] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isPlaceholder, setIsPlaceholder] = useState(false);
 
   // Animações de entrada
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.85)).current;
+  // Animação de transição de texto
+  const textFadeAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     // Animação de abertura da carta
@@ -75,40 +80,70 @@ export default function CorreioScreen() {
     try {
       // 1ª tentativa: AsyncStorage (offline-first)
       const cached = await readCache(STORAGE_KEYS.MESSAGES);
+      let todayMsgs = [];
 
       if (cached.length > 0) {
         // Filtra localmente pela data de hoje
-        const todayMsg = cached.find((m) => m.unlockDate === today);
-        if (todayMsg) {
-          setMessage(todayMsg);
-          setIsPlaceholder(false);
-          return; // achou no cache, pronto!
-        }
+        todayMsgs = cached.filter((m) => m.unlockDate === today);
       }
 
-      // 2ª tentativa: Firestore (online fallback)
-      const snap = await getDocs(collection(db, "messages"));
-      const allMessages = snap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      const todayMsg = allMessages.find((m) => m.unlockDate === today);
+      if (todayMsgs.length === 0) {
+        // 2ª tentativa: Firestore (online fallback)
+        const snap = await getDocs(collection(db, "messages"));
+        const allMessages = snap.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        todayMsgs = allMessages.filter((m) => m.unlockDate === today);
+      }
 
-      if (todayMsg) {
-        setMessage(todayMsg);
+      if (todayMsgs.length > 0) {
+        setMessages(todayMsgs);
+        setCurrentIndex(0);
         setIsPlaceholder(false);
       } else {
-        setMessage(PLACEHOLDER_MESSAGE);
+        setMessages([PLACEHOLDER_MESSAGE]);
+        setCurrentIndex(0);
         setIsPlaceholder(true);
       }
     } catch (error) {
       console.warn("[Correio] Erro ao carregar mensagem:", error.message);
-      setMessage(PLACEHOLDER_MESSAGE);
+      setMessages([PLACEHOLDER_MESSAGE]);
+      setCurrentIndex(0);
       setIsPlaceholder(true);
     } finally {
       setLoading(false);
     }
   }
+
+  const animateTransition = (callback) => {
+    Animated.timing(textFadeAnim, {
+      toValue: 0,
+      duration: 150,
+      useNativeDriver: true,
+    }).start(() => {
+      callback();
+      Animated.timing(textFadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    });
+  };
+
+  const nextMessage = () => {
+    if (currentIndex < messages.length - 1) {
+      animateTransition(() => setCurrentIndex(currentIndex + 1));
+    }
+  };
+
+  const prevMessage = () => {
+    if (currentIndex > 0) {
+      animateTransition(() => setCurrentIndex(currentIndex - 1));
+    }
+  };
+
+  const currentMsg = messages[currentIndex] || PLACEHOLDER_MESSAGE;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -154,14 +189,14 @@ export default function CorreioScreen() {
                 <Text style={styles.loadingText}>Abrindo a cartinha... 🎀</Text>
               </View>
             ) : (
-              <>
+              <Animated.View style={{ opacity: textFadeAnim, flex: 1, justifyContent: 'center' }}>
                 {/* Linhas decorativas de papel pautado */}
                 {[...Array(3)].map((_, i) => (
                   <View key={i} style={styles.paperLine} />
                 ))}
 
                 {/* Texto da mensagem */}
-                <Text style={styles.messageText}>{message?.text}</Text>
+                <Text style={styles.messageText}>{currentMsg.text}</Text>
 
                 {/* Linhas decorativas finais */}
                 {[...Array(2)].map((_, i) => (
@@ -171,22 +206,42 @@ export default function CorreioScreen() {
                 {/* Assinatura */}
                 <View style={styles.signatureContainer}>
                   <Text style={styles.signatureText}>
-                    {message?.sender ?? "Com amor 💕"}
+                    {currentMsg.sender ?? "Com amor 💕"}
                   </Text>
                   <Text style={styles.signatureEmoji}>🐸🧸</Text>
                 </View>
+              </Animated.View>
+            )}
+            
+            {/* Navegação caso tenha mais de 1 mensagem */}
+            {!loading && messages.length > 1 && (
+              <>
+                {currentIndex > 0 && (
+                  <TouchableOpacity style={[styles.navButton, styles.navLeft]} onPress={prevMessage}>
+                    <Ionicons name="chevron-back" size={24} color={colors.white} />
+                  </TouchableOpacity>
+                )}
+                {currentIndex < messages.length - 1 && (
+                  <TouchableOpacity style={[styles.navButton, styles.navRight]} onPress={nextMessage}>
+                    <Ionicons name="chevron-forward" size={24} color={colors.white} />
+                  </TouchableOpacity>
+                )}
               </>
             )}
           </View>
 
-          {/* Rodapé com aviso de placeholder */}
-          {isPlaceholder && !loading && (
-            <View style={styles.placeholderBadge}>
-              <Text style={styles.placeholderText}>
+          {/* Rodapé com aviso de placeholder ou paginação */}
+          <View style={styles.footerBadge}>
+            {isPlaceholder && !loading ? (
+              <Text style={styles.footerText}>
                 💭 Mensagem especial chegando em breve!
               </Text>
-            </View>
-          )}
+            ) : !loading && messages.length > 1 ? (
+              <Text style={styles.footerText}>
+                Cartinha {currentIndex + 1} de {messages.length} 🌸
+              </Text>
+            ) : null}
+          </View>
         </Animated.View>
 
         {/* Decorações do fundo */}
@@ -321,20 +376,41 @@ const styles = StyleSheet.create({
     fontSize: 22,
   },
 
-  // Badge placeholder
-  placeholderBadge: {
+  // Badge placeholder / paginação
+  footerBadge: {
     backgroundColor: colors.bearLight,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     alignItems: "center",
     borderTopWidth: 1,
     borderTopColor: colors.envelopeBorder,
+    minHeight: 36,
   },
-  placeholderText: {
+  footerText: {
     fontSize: 12,
     color: colors.textMedium,
     fontStyle: "italic",
     textAlign: "center",
+  },
+  
+  // Navegação
+  navButton: {
+    position: 'absolute',
+    top: '50%',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primaryAccent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -18,
+    ...shadows.soft,
+  },
+  navLeft: {
+    left: -18,
+  },
+  navRight: {
+    right: -18,
   },
 
   // Bônus
