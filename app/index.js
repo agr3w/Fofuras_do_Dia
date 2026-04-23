@@ -248,9 +248,7 @@ export default function HomeScreen() {
           <TouchableOpacity
             style={[styles.futureButton, { backgroundColor: colors.melodyPink }]}
             activeOpacity={0.8}
-            onPress={() =>
-              Alert.alert('🎵 Em breve!', 'Nossa playlist chegando em breve!')
-            }
+            onPress={() => router.push('/playlist')}
           >
             <Text style={styles.futureButtonEmoji}>🎵</Text>
             <Text style={styles.futureButtonLabel}>Nossa{'\n'}Playlist</Text>
