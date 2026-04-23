@@ -5,7 +5,7 @@
 //  enquanto não há conexão ou mensagem cadastrada.
 // ============================================================
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -45,22 +45,18 @@ export default function CorreioScreen() {
   const [isPlaceholder, setIsPlaceholder] = useState(false);
 
   // Animações de entrada
-  const fadeAnim = useRef ? useRef(new Animated.Value(0)).current : new Animated.Value(0);
-  const scaleAnim = useRef ? useRef(new Animated.Value(0.85)).current : new Animated.Value(0.85);
-
-  // Fix: usar import do useRef
-  const fadeRef = React.useRef(new Animated.Value(0));
-  const scaleRef = React.useRef(new Animated.Value(0.85));
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.85)).current;
 
   useEffect(() => {
     // Animação de abertura da carta
     Animated.parallel([
-      Animated.timing(fadeRef.current, {
+      Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 700,
         useNativeDriver: true,
       }),
-      Animated.spring(scaleRef.current, {
+      Animated.spring(scaleAnim, {
         toValue: 1,
         friction: 6,
         tension: 100,
@@ -116,8 +112,8 @@ export default function CorreioScreen() {
           style={[
             styles.letterWrapper,
             {
-              opacity: fadeRef.current,
-              transform: [{ scale: scaleRef.current }],
+              opacity: fadeAnim,
+              transform: [{ scale: scaleAnim }],
             },
           ]}
         >

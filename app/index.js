@@ -5,7 +5,7 @@
 //  botões de funcionalidades futuras e botão secreto do admin.
 // ============================================================
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import {
   ScrollView,
   Animated,
   Alert,
+  Modal,
+  TextInput,
   Dimensions,
   SafeAreaView,
 } from 'react-native';
@@ -29,6 +31,10 @@ const ADMIN_PIN = '1234';
 
 export default function HomeScreen() {
   const router = useRouter();
+
+  // Modal do PIN secreto
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [secretPin, setSecretPin] = useState('');
 
   // Animação de entrada (fade + slide up)
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -69,26 +75,26 @@ export default function HomeScreen() {
     ).start();
   }, []);
 
-  // Botão secreto: pede PIN via Alert
+  // Botão secreto: abre modal de PIN (funciona em Android, iOS e Web)
   const handleSecretPress = () => {
-    Alert.prompt(
-      '🔐 PIN Secreto',
-      'Digite o código para entrar:',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Entrar',
-          onPress: (pin) => {
-            if (pin === ADMIN_PIN) {
-              router.push('/admin');
-            } else {
-              Alert.alert('💔 Ops!', 'PIN incorreto, fofo!');
-            }
-          },
-        },
-      ],
-      'secure-text'
-    );
+    setSecretPin('');
+    setIsModalVisible(true);
+  };
+
+  const handlePinSubmit = () => {
+    if (secretPin === ADMIN_PIN) {
+      setIsModalVisible(false);
+      setSecretPin('');
+      router.push('/admin');
+    } else {
+      Alert.alert('💔 Ops!', 'PIN incorreto, fofo!');
+      setSecretPin('');
+    }
+  };
+
+  const handlePinCancel = () => {
+    setIsModalVisible(false);
+    setSecretPin('');
   };
 
   return (
@@ -195,9 +201,7 @@ export default function HomeScreen() {
           <TouchableOpacity
             style={[styles.futureButton, { backgroundColor: colors.kuromiPurple }]}
             activeOpacity={0.8}
-            onPress={() =>
-              Alert.alert('🎡 Em breve!', 'A Roleta de Mimos está chegando, Rana!')
-            }
+            onPress={() => router.push('/roleta')}
           >
             <Text style={styles.futureButtonEmoji}>🎡</Text>
             <Text style={styles.futureButtonLabel}>Roleta{'\n'}de Mimos</Text>
@@ -246,6 +250,53 @@ export default function HomeScreen() {
           <Text style={styles.secretButtonText}>🌟</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* ── Modal de PIN Secreto ─────────────────────── */}
+      <Modal
+        transparent
+        visible={isModalVisible}
+        animationType="fade"
+        onRequestClose={handlePinCancel}
+      >
+        <View style={styles.pinOverlay}>
+          <View style={styles.pinBox}>
+            <Text style={styles.pinEmoji}>🔐</Text>
+            <Text style={styles.pinTitle}>Acesso Secreto</Text>
+            <Text style={styles.pinSubtitle}>Digite o PIN para continuar</Text>
+
+            <TextInput
+              style={styles.pinInput}
+              value={secretPin}
+              onChangeText={setSecretPin}
+              secureTextEntry
+              keyboardType="numeric"
+              maxLength={6}
+              placeholder="••••"
+              placeholderTextColor={colors.textLight}
+              autoFocus
+              onSubmitEditing={handlePinSubmit}
+            />
+
+            <View style={styles.pinButtonRow}>
+              <TouchableOpacity
+                style={[styles.pinButton, styles.pinButtonCancel]}
+                onPress={handlePinCancel}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.pinButtonCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.pinButton, styles.pinButtonConfirm]}
+                onPress={handlePinSubmit}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.pinButtonConfirmText}>Entrar ✨</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -426,4 +477,85 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textLight,
   },
+
+  // ── Modal PIN Secreto ─────────────────────────────
+  pinOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(74, 74, 74, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  pinBox: {
+    width: '100%',
+    backgroundColor: colors.cardWhite,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.cardBorder,
+    ...shadows.medium,
+  },
+  pinEmoji: {
+    fontSize: 40,
+    marginBottom: spacing.sm,
+  },
+  pinTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: colors.textDark,
+    marginBottom: 4,
+  },
+  pinSubtitle: {
+    fontSize: 13,
+    color: colors.textMedium,
+    marginBottom: spacing.lg,
+    fontStyle: 'italic',
+  },
+  pinInput: {
+    width: '100%',
+    backgroundColor: colors.backgroundPink,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    borderColor: colors.primaryAccent,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: 22,
+    color: colors.textDark,
+    textAlign: 'center',
+    letterSpacing: 8,
+    marginBottom: spacing.lg,
+  },
+  pinButtonRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    width: '100%',
+  },
+  pinButton: {
+    flex: 1,
+    borderRadius: borderRadius.pill,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pinButtonCancel: {
+    backgroundColor: colors.backgroundCream,
+    borderWidth: 1.5,
+    borderColor: colors.cardBorder,
+  },
+  pinButtonCancelText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textMedium,
+  },
+  pinButtonConfirm: {
+    backgroundColor: colors.primaryAccent,
+    ...shadows.soft,
+  },
+  pinButtonConfirmText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.white,
+  },
 });
+

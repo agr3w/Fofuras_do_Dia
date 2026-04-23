@@ -49,6 +49,17 @@ export default function RootLayout() {
             headerStyle: { backgroundColor: colors.backgroundCream },
           }}
         />
+
+        {/* Roleta de Mimos */}
+        <Stack.Screen
+          name="roleta/index"
+          options={{
+            title: '🎡 Roleta de Mimos',
+            headerBackTitle: 'Início',
+            headerStyle: { backgroundColor: colors.backgroundPink },
+            headerTintColor: colors.kuromiPurple,
+          }}
+        />
       </Stack>
     </>
   );
