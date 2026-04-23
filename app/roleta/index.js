@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import { db } from '../../services/firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { readCache, STORAGE_KEYS } from '../../services/syncService';
 import DecorationRow from '../../components/DecorationRow';
 import FofoCard from '../../components/FofoCard';
 import { colors, spacing, borderRadius, shadows } from '../../theme/theme';
@@ -77,12 +78,31 @@ export default function RoletaScreen() {
 
   async function loadCoupons() {
     try {
+      // 1ª tentativa: AsyncStorage (offline-first)
+      const cached = await readCache(STORAGE_KEYS.COUPONS);
+
+      if (cached.length > 0) {
+        setCoupons(cached);
+        return; // dados do cache, pronto!
+      }
+
+      // 2ª tentativa: Firestore (online fallback)
       const snap = await getDocs(collection(db, 'coupons'));
       const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setCoupons(list);
+
+      if (list.length > 0) {
+        setCoupons(list);
+      } else {
+        // 3ª tentativa: demo hardcoded
+        setCoupons([
+          { id: 'demo1', title: '🌹 Vale Abraço Especial', description: 'Válido para 1 abraço demorado quando quiser!' },
+          { id: 'demo2', title: '☕ Vale Café da Manhã', description: 'Café quentinho na cama, com muito amor.' },
+          { id: 'demo3', title: '💆 Vale Massagem', description: 'Válido para 30 minutos de massagem relaxante.' },
+        ]);
+      }
     } catch (err) {
-      console.warn('Erro ao buscar cupões:', err.message);
-      // Cupões de exemplo para demonstração visual
+      console.warn('[Roleta] Erro ao carregar cupões:', err.message);
+      // Fallback demo
       setCoupons([
         { id: 'demo1', title: '🌹 Vale Abraço Especial', description: 'Válido para 1 abraço demorado quando quiser!' },
         { id: 'demo2', title: '☕ Vale Café da Manhã', description: 'Café quentinho na cama, com muito amor.' },

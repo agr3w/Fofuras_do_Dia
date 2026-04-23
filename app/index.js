@@ -23,6 +23,7 @@ import { useRouter } from 'expo-router';
 import DecorationRow from '../components/DecorationRow';
 import FofoCard from '../components/FofoCard';
 import { colors, spacing, borderRadius, shadows, typography } from '../theme/theme';
+import { syncData } from '../services/syncService';
 
 const { width } = Dimensions.get('window');
 
@@ -44,6 +45,11 @@ export default function HomeScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    // Sincroniza silenciosamente em background (offline-first)
+    // Se a Rana tiver internet, baixa novidades para o cache.
+    // Se estiver offline, o syncData falha silenciosamente.
+    syncData();
+
     // Entrada suave
     Animated.parallel([
       Animated.timing(fadeAnim, {

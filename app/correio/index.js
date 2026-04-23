@@ -17,7 +17,8 @@ import {
   Dimensions,
 } from 'react-native';
 import { db } from '../../services/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
+import { readCache, STORAGE_KEYS } from '../../services/syncService';
 import DecorationRow from '../../components/DecorationRow';
 import FofoCard from '../../components/FofoCard';
 import { colors, spacing, borderRadius, shadows, typography } from '../../theme/theme';
@@ -69,24 +70,36 @@ export default function CorreioScreen() {
   }, []);
 
   async function loadTodayMessage() {
-    try {
-      const today = getTodayString();
-      const messagesRef = collection(db, 'messages');
-      const q = query(messagesRef, where('unlockDate', '==', today));
-      const snapshot = await getDocs(q);
+    const today = getTodayString();
 
-      if (!snapshot.empty) {
-        const data = snapshot.docs[0].data();
-        setMessage(data);
+    try {
+      // 1ª tentativa: AsyncStorage (offline-first)
+      const cached = await readCache(STORAGE_KEYS.MESSAGES);
+
+      if (cached.length > 0) {
+        // Filtra localmente pela data de hoje
+        const todayMsg = cached.find((m) => m.unlockDate === today);
+        if (todayMsg) {
+          setMessage(todayMsg);
+          setIsPlaceholder(false);
+          return; // achou no cache, pronto!
+        }
+      }
+
+      // 2ª tentativa: Firestore (online fallback)
+      const snap = await getDocs(collection(db, 'messages'));
+      const allMessages = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const todayMsg = allMessages.find((m) => m.unlockDate === today);
+
+      if (todayMsg) {
+        setMessage(todayMsg);
         setIsPlaceholder(false);
       } else {
-        // Sem mensagem para hoje — usa placeholder
         setMessage(PLACEHOLDER_MESSAGE);
         setIsPlaceholder(true);
       }
     } catch (error) {
-      console.warn('Firebase não conectado ou erro ao buscar mensagem:', error.message);
-      // Mostra placeholder graciosamente
+      console.warn('[Correio] Erro ao carregar mensagem:', error.message);
       setMessage(PLACEHOLDER_MESSAGE);
       setIsPlaceholder(true);
     } finally {
