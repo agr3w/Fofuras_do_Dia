@@ -15,10 +15,13 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  FlatList,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../services/firebase';
-import { collection, doc, addDoc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import FofoCard from '../components/FofoCard';
 import { colors, spacing, borderRadius, shadows } from '../theme/theme';
 
@@ -41,12 +44,26 @@ export default function AdminScreen() {
   // Estado: aba Mimo
   const [couponTitle, setCouponTitle]   = useState('');
   const [couponDesc,  setCouponDesc]    = useState('');
+  const [couponValidade, setCouponValidade] = useState('7');
   const [loadingCoup, setLoadingCoup]   = useState(false);
+
+  // Estado: lista de mimos
+  const [couponList,    setCouponList]    = useState([]);
+  const [loadingList,   setLoadingList]   = useState(false);
+  const [showAddForm,   setShowAddForm]   = useState(false);
+
+  // Estado: modal de editar mimo
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingCoupon,    setEditingCoupon]    = useState(null);
+  const [editTitle,        setEditTitle]        = useState('');
+  const [editDesc,         setEditDesc]         = useState('');
+  const [editValidade,     setEditValidade]     = useState('7');
 
   // Estado: aba Configurações
   const [notifHour, setNotifHour]       = useState('09');
   const [notifMinute, setNotifMinute]   = useState('00');
   const [notifMsg, setNotifMsg]         = useState('Ei Rana, tem cartinha nova pra você! 🌸');
+  const [limiteGiros, setLimiteGiros]   = useState('3');
   const [loadingSettings, setLoadingSettings] = useState(false);
 
   // Carregar configurações atuais
@@ -60,12 +77,89 @@ export default function AdminScreen() {
           if (data.notificationMinute) setNotifMinute(data.notificationMinute.toString().padStart(2, '0'));
           if (data.notificationMessage) setNotifMsg(data.notificationMessage);
         }
+        const globalSnap = await getDoc(doc(db, 'settings', 'global'));
+        if (globalSnap.exists() && globalSnap.data().limiteGiros !== undefined) {
+          setLimiteGiros(String(globalSnap.data().limiteGiros));
+        }
       } catch (e) {
         console.warn('Erro ao carregar settings:', e);
       }
     }
     loadSettings();
   }, []);
+
+  // Carregar lista de mimos quando mudar para a aba
+  React.useEffect(() => {
+    if (activeTab === 'mimo') {
+      loadCouponList();
+    }
+  }, [activeTab]);
+
+  const loadCouponList = async () => {
+    setLoadingList(true);
+    try {
+      const snap = await getDocs(collection(db, 'coupons'));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setCouponList(list);
+    } catch (e) {
+      Alert.alert('❌ Erro', 'Não foi possível carregar os mimos.');
+    } finally {
+      setLoadingList(false);
+    }
+  };
+
+  const handleDeleteCoupon = (coupon) => {
+    Alert.alert(
+      '🗑️ Excluir Mimo?',
+      `Tem certeza que quer apagar "${coupon.title}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sim, apagar!',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, 'coupons', coupon.id));
+              setCouponList(prev => prev.filter(c => c.id !== coupon.id));
+            } catch (e) {
+              Alert.alert('❌ Erro', 'Não foi possível excluir.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleEditCoupon = (coupon) => {
+    setEditingCoupon(coupon);
+    setEditTitle(coupon.title);
+    setEditDesc(coupon.description || '');
+    setEditValidade(String(coupon.validadeDias || 7));
+    setEditModalVisible(true);
+  };
+
+  const handleUpdateCoupon = async () => {
+    if (!editTitle.trim()) {
+      Alert.alert('🎁 Ops!', 'O título não pode estar vazio!');
+      return;
+    }
+    try {
+      await updateDoc(doc(db, 'coupons', editingCoupon.id), {
+        title: editTitle.trim(),
+        description: editDesc.trim(),
+        validadeDias: parseInt(editValidade, 10) || 7,
+      });
+      setCouponList(prev =>
+        prev.map(c => c.id === editingCoupon.id
+          ? { ...c, title: editTitle.trim(), description: editDesc.trim(), validadeDias: parseInt(editValidade, 10) || 7 }
+          : c
+        )
+      );
+      setEditModalVisible(false);
+    } catch (e) {
+      Alert.alert('❌ Erro', 'Não foi possível atualizar o mimo.');
+    }
+  };
 
   // ── Helpers de data
   const handleDateChange = (text) => {
@@ -123,12 +217,13 @@ export default function AdminScreen() {
       await addDoc(collection(db, 'coupons'), {
         title: couponTitle.trim(),
         description: couponDesc.trim(),
+        validadeDias: parseInt(couponValidade, 10) || 7,
         createdAt: serverTimestamp(),
       });
       Alert.alert(
         '🎉 Mimo cadastrado!',
         `"${couponTitle.trim()}" foi adicionado à Roleta de Mimos! 🎡`,
-        [{ text: 'Arrasou! 💜', onPress: () => { setCouponTitle(''); setCouponDesc(''); } }]
+        [{ text: 'Arrasou! 💜', onPress: () => { setCouponTitle(''); setCouponDesc(''); setCouponValidade('7'); } }]
       );
     } catch (e) {
       Alert.alert('❌ Erro', `Não foi possível salvar o cupão.\n\n${e.message}`);
@@ -145,13 +240,19 @@ export default function AdminScreen() {
     }
     setLoadingSettings(true);
     try {
-      await setDoc(doc(db, 'settings', 'config'), {
-        notificationHour: parseInt(notifHour, 10),
-        notificationMinute: parseInt(notifMinute, 10),
-        notificationMessage: notifMsg.trim(),
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
-      Alert.alert('✅ Configurações salvas!', 'As notificações foram atualizadas.');
+      await Promise.all([
+        setDoc(doc(db, 'settings', 'config'), {
+          notificationHour: parseInt(notifHour, 10),
+          notificationMinute: parseInt(notifMinute, 10),
+          notificationMessage: notifMsg.trim(),
+          updatedAt: serverTimestamp(),
+        }, { merge: true }),
+        setDoc(doc(db, 'settings', 'global'), {
+          limiteGiros: parseInt(limiteGiros, 10) || 3,
+          updatedAt: serverTimestamp(),
+        }, { merge: true }),
+      ]);
+      Alert.alert('✅ Configurações salvas!', 'As notificações e o limite de giros foram atualizados.');
     } catch (e) {
       Alert.alert('❌ Erro ao salvar', `Verifique sua conexão e o Firebase.\n\n${e.message}`);
     } finally {
@@ -267,60 +368,160 @@ export default function AdminScreen() {
             </>
           )}
 
-          {/* ════════════════════════════════════════
-              TAB: Novo Mimo (Cupão)
-          ════════════════════════════════════════ */}
+          {/* ════════════ TAB: MIMOS (CRUD) ════════════ */}
           {activeTab === 'mimo' && (
             <>
-              <FofoCard style={styles.formCard} backgroundColor={colors.backgroundCream}>
-                <Text style={styles.label}>🏷️ Título do Cupão</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ex: Vale Massagem 💆"
-                  placeholderTextColor={colors.textLight}
-                  value={couponTitle}
-                  onChangeText={setCouponTitle}
-                  maxLength={80}
-                />
-                <Text style={styles.charCount}>{couponTitle.length}/80</Text>
-
-                <Text style={[styles.label, { marginTop: spacing.md }]}>📝 Descrição</Text>
-                <TextInput
-                  style={[styles.textArea, { minHeight: 100 }]}
-                  placeholder="Ex: Válido para 30 minutos de massagem relaxante."
-                  placeholderTextColor={colors.textLight}
-                  value={couponDesc}
-                  onChangeText={setCouponDesc}
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                  maxLength={300}
-                />
-                <Text style={styles.charCount}>{couponDesc.length}/300</Text>
-              </FofoCard>
-
+              {/* Botão de adicionar */}
               <TouchableOpacity
-                style={[styles.sendButton, { backgroundColor: colors.kuromiPurple }, loadingCoup && styles.buttonDisabled]}
-                onPress={handleSaveCoupon}
-                disabled={loadingCoup}
+                style={[styles.sendButton, { backgroundColor: colors.kuromiPurple }]}
+                onPress={() => setShowAddForm(v => !v)}
                 activeOpacity={0.85}
               >
-                {loadingCoup ? (
-                  <ActivityIndicator color={colors.white} />
-                ) : (
-                  <>
-                    <Text style={styles.sendButtonEmoji}>🎁</Text>
-                    <Text style={styles.sendButtonText}>Salvar Mimo</Text>
-                  </>
-                )}
+                <Ionicons name={showAddForm ? 'close-circle' : 'add-circle'} size={22} color={colors.white} />
+                <Text style={styles.sendButtonText}>
+                  {showAddForm ? 'Cancelar' : 'Adicionar Novo Mimo'}
+                </Text>
               </TouchableOpacity>
 
-              <FofoCard style={styles.infoCard} backgroundColor={colors.backgroundMint} shadow="light">
-                <Text style={styles.infoTitle}>📚 Coleção: coupons</Text>
-                <Text style={styles.infoText}>
-                  {'• title (string)\n• description (string)\n• createdAt (timestamp)'}
-                </Text>
-              </FofoCard>
+              {/* Formulário de Adicionar */}
+              {showAddForm && (
+                <FofoCard style={styles.formCard} backgroundColor={colors.backgroundCream}>
+                  <Text style={styles.label}>🏷️ Título do Coupão</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Ex: Vale Massagem 💆"
+                    placeholderTextColor={colors.textLight}
+                    value={couponTitle}
+                    onChangeText={setCouponTitle}
+                    maxLength={80}
+                  />
+                  <Text style={[styles.label, { marginTop: spacing.md }]}>📝 Descrição</Text>
+                  <TextInput
+                    style={[styles.textArea, { minHeight: 90 }]}
+                    placeholder="Ex: Válido para 30 minutos de massagem."
+                    placeholderTextColor={colors.textLight}
+                    value={couponDesc}
+                    onChangeText={setCouponDesc}
+                    multiline
+                    textAlignVertical="top"
+                    maxLength={300}
+                  />
+                  <Text style={[styles.label, { marginTop: spacing.md }]}>⏳ Validade (em dias)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Ex: 7"
+                    placeholderTextColor={colors.textLight}
+                    value={couponValidade}
+                    onChangeText={setCouponValidade}
+                    keyboardType="numeric"
+                    maxLength={3}
+                  />
+                  <TouchableOpacity
+                    style={[styles.sendButton, { backgroundColor: colors.kuromiPurple, marginTop: spacing.md }, loadingCoup && styles.buttonDisabled]}
+                    onPress={handleSaveCoupon}
+                    disabled={loadingCoup}
+                    activeOpacity={0.85}
+                  >
+                    {loadingCoup ? <ActivityIndicator color={colors.white} /> : (
+                      <><Text style={styles.sendButtonEmoji}>🎁</Text><Text style={styles.sendButtonText}>Salvar Mimo</Text></>
+                    )}
+                  </TouchableOpacity>
+                </FofoCard>
+              )}
+
+              {/* Lista de Mimos */}
+              {loadingList ? (
+                <ActivityIndicator size="large" color={colors.kuromiPurple} style={{ marginTop: spacing.lg }} />
+              ) : couponList.length === 0 ? (
+                <FofoCard backgroundColor={colors.backgroundCream}>
+                  <Text style={{ textAlign: 'center', color: colors.textMedium, fontSize: 16 }}>
+                    Nenhum mimo cadastrado ainda! 🧸
+                  </Text>
+                </FofoCard>
+              ) : (
+                couponList.map((coupon, idx) => {
+                  const cardColors = [colors.melodyPink, colors.kuromiLilac, colors.primaryAccent, colors.bearLight];
+                  const bg = cardColors[idx % cardColors.length];
+                  return (
+                    <FofoCard key={coupon.id} backgroundColor={bg} style={{ marginBottom: 0 }}>
+                      <View style={styles.couponCardRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.couponCardTitle}>{coupon.title}</Text>
+                          {coupon.description ? (
+                            <Text style={styles.couponCardDesc} numberOfLines={2}>{coupon.description}</Text>
+                          ) : null}
+                        </View>
+                        <View style={styles.couponCardActions}>
+                          <TouchableOpacity
+                            style={[styles.iconButton, { backgroundColor: colors.cardWhite }]}
+                            onPress={() => handleEditCoupon(coupon)}
+                          >
+                            <Ionicons name="pencil" size={18} color={colors.textDark} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.iconButton, { backgroundColor: '#FFEBEE' }]}
+                            onPress={() => handleDeleteCoupon(coupon)}
+                          >
+                            <Ionicons name="trash" size={18} color={colors.heartRed} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </FofoCard>
+                  );
+                })
+              )}
+
+              {/* Modal de Editar */}
+              <Modal
+                visible={editModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setEditModalVisible(false)}
+              >
+                <View style={styles.editModalOverlay}>
+                  <View style={styles.editModalBox}>
+                    <Text style={styles.editModalTitle}>✏️ Editar Mimo</Text>
+                    <TextInput
+                      style={[styles.input, { marginBottom: spacing.sm }]}
+                      value={editTitle}
+                      onChangeText={setEditTitle}
+                      placeholder="Título"
+                      maxLength={80}
+                    />
+                    <TextInput
+                      style={[styles.textArea, { marginBottom: spacing.md }]}
+                      value={editDesc}
+                      onChangeText={setEditDesc}
+                      placeholder="Descrição"
+                      multiline
+                      textAlignVertical="top"
+                      maxLength={300}
+                    />
+                    <TextInput
+                      style={[styles.input, { marginBottom: spacing.md }]}
+                      value={editValidade}
+                      onChangeText={setEditValidade}
+                      placeholder="Validade (em dias)"
+                      keyboardType="numeric"
+                      maxLength={3}
+                    />
+                    <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                      <TouchableOpacity
+                        style={[styles.sendButton, { flex: 1, backgroundColor: colors.textMedium }]}
+                        onPress={() => setEditModalVisible(false)}
+                      >
+                        <Text style={styles.sendButtonText}>Cancelar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.sendButton, { flex: 1, backgroundColor: colors.kuromiPurple }]}
+                        onPress={handleUpdateCoupon}
+                      >
+                        <Text style={styles.sendButtonText}>Salvar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </Modal>
             </>
           )}
 
@@ -330,7 +531,7 @@ export default function AdminScreen() {
               <View style={styles.cardWrapper}>
                 <Text style={styles.cardEmoji}>⚙️</Text>
                 <Text style={styles.cardTitle}>Configurações</Text>
-                <Text style={styles.cardSubtitle}>Horário e mensagem das notificações.</Text>
+                <Text style={styles.cardSubtitle}>Notificações e Roleta.</Text>
 
                 {/* Horário */}
                 <View style={styles.inputGroup}>
@@ -366,6 +567,20 @@ export default function AdminScreen() {
                     onChangeText={setNotifMsg}
                     multiline
                     numberOfLines={2}
+                  />
+                </View>
+
+                {/* Limite de Giros */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>🎡 Limite de Giros por Dia</Text>
+                  <Text style={styles.dateHint}>Quantas vezes a Rana pode girar a roleta por dia.</Text>
+                  <TextInput
+                    style={[styles.input, { textAlign: 'center', marginTop: spacing.sm }]}
+                    placeholder="Ex: 3"
+                    value={limiteGiros}
+                    onChangeText={setLimiteGiros}
+                    keyboardType="numeric"
+                    maxLength={2}
                   />
                 </View>
 
@@ -521,5 +736,57 @@ const styles = StyleSheet.create({
     color: colors.textMedium,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     lineHeight: 20,
+  },
+
+  // Coupon list cards
+  couponCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  couponCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textDark,
+    marginBottom: 2,
+  },
+  couponCardDesc: {
+    fontSize: 13,
+    color: colors.textMedium,
+    lineHeight: 18,
+  },
+  couponCardActions: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    alignItems: 'center',
+  },
+  iconButton: {
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    ...shadows.light,
+  },
+
+  // Edit Modal
+  editModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  editModalBox: {
+    backgroundColor: colors.cardWhite,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    width: '100%',
+    gap: spacing.sm,
+    ...shadows.medium,
+  },
+  editModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.textDark,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
   },
 });

@@ -19,8 +19,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../../services/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, addDoc } from 'firebase/firestore';
 import { readCache, STORAGE_KEYS } from '../../services/syncService';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import DecorationRow from '../../components/DecorationRow';
 import FofoCard from '../../components/FofoCard';
 import { colors, spacing, borderRadius, shadows } from '../../theme/theme';
@@ -37,6 +39,12 @@ export default function RoletaScreen() {
   const [winner, setWinner] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [spinIndex, setSpinIndex] = useState(0);
+  const [girosHoje, setGirosHoje] = useState(0);
+  const [limiteGiros, setLimiteGiros] = useState(3);
+
+  // Histórico
+  const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [drawnMimos, setDrawnMimos] = useState([]);
 
   // Animações
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -56,16 +64,50 @@ export default function RoletaScreen() {
       Animated.spring(scaleAnim, { toValue: 1, friction: 6, useNativeDriver: true }),
     ]).start();
 
-    // Pulso no botão
     startButtonPulse();
-
-    // Busca cupões
     loadCoupons();
+    loadSpinData();
 
     return () => {
       if (spinInterval.current) clearInterval(spinInterval.current);
     };
   }, []);
+
+  async function loadSpinData() {
+    try {
+      // Limite de giros configurado no admin
+      const settings = await readCache(STORAGE_KEYS.SETTINGS);
+      if (settings?.limiteGiros !== undefined) {
+        setLimiteGiros(Number(settings.limiteGiros));
+      } else {
+        // Busca diretamente a chave global no AsyncStorage
+        const globalRaw = await AsyncStorage.getItem('@settings_global');
+        if (globalRaw) {
+          const global = JSON.parse(globalRaw);
+          if (global.limiteGiros !== undefined) setLimiteGiros(Number(global.limiteGiros));
+        }
+      }
+
+      // Histórico local
+      const history = await readCache(STORAGE_KEYS.DRAWN_MIMOS);
+      setDrawnMimos(history);
+
+      // Giros do dia corrente
+      const today = new Date().toISOString().slice(0, 10);
+      const stored = await AsyncStorage.getItem('@giros');
+      if (stored) {
+        const { date, count } = JSON.parse(stored);
+        if (date === today) {
+          setGirosHoje(count);
+        } else {
+          // Novo dia: zera o contador
+          await AsyncStorage.setItem('@giros', JSON.stringify({ date: today, count: 0 }));
+        }
+      }
+    } catch (e) {
+      console.warn('[Roleta] Erro ao carregar dados de giro:', e);
+    }
+  }
 
   function startButtonPulse() {
     Animated.loop(
@@ -114,7 +156,7 @@ export default function RoletaScreen() {
   }
 
   function handleSpin() {
-    if (spinning || coupons.length === 0) return;
+    if (spinning || coupons.length === 0 || girosHoje >= limiteGiros) return;
 
     setSpinning(true);
     setWinner(null);
@@ -134,13 +176,40 @@ export default function RoletaScreen() {
     }, 120);
 
     // Após 2.4 segundos, para e sorteia
-    setTimeout(() => {
+    setTimeout(async () => {
       clearInterval(spinInterval.current);
       spinInterval.current = null;
 
       const picked = coupons[Math.floor(Math.random() * coupons.length)];
       setWinner(picked);
       setSpinning(false);
+
+      // Histórico e expiração
+      const validadeDias = picked.validadeDias || 7;
+      const expDate = new Date();
+      expDate.setDate(expDate.getDate() + validadeDias);
+
+      const drawnCoupon = {
+        ...picked,
+        drawnDate: new Date().toISOString(),
+        expirationDate: expDate.toISOString(),
+      };
+
+      const newHistory = [drawnCoupon, ...drawnMimos];
+      setDrawnMimos(newHistory);
+      await AsyncStorage.setItem(STORAGE_KEYS.DRAWN_MIMOS, JSON.stringify(newHistory));
+
+      try {
+        await addDoc(collection(db, 'user_history'), drawnCoupon);
+      } catch (e) {
+        console.warn('[Roleta] Erro ao salvar histórico online:', e.message);
+      }
+
+      // Incrementa giros do dia
+      const newCount = girosHoje + 1;
+      setGirosHoje(newCount);
+      const today = new Date().toISOString().slice(0, 10);
+      await AsyncStorage.setItem('@giros', JSON.stringify({ date: today, count: newCount }));
 
       // Anima abertura do modal
       modalScale.setValue(0.6);
@@ -235,21 +304,36 @@ export default function RoletaScreen() {
         </Animated.View>
 
         {/* ── Botão Sortear ── */}
+        {/* Indicador de giros */}
+        {!loadingCoupons && limiteGiros > 0 && (
+          <View style={styles.girosIndicator}>
+            <Text style={styles.girosText}>
+              {girosHoje >= limiteGiros
+                ? 'Limite diário atingido! 🧸'
+                : `${girosHoje}/${limiteGiros} giros usados hoje`}
+            </Text>
+          </View>
+        )}
         <Animated.View style={{ transform: [{ scale: spinning ? new Animated.Value(0.95) : buttonPulse }] }}>
           <TouchableOpacity
             style={[
               styles.spinButton,
               spinning && styles.spinButtonSpinning,
-              coupons.length === 0 && styles.spinButtonDisabled,
+              (coupons.length === 0 || girosHoje >= limiteGiros) && styles.spinButtonDisabled,
             ]}
             onPress={handleSpin}
-            disabled={spinning || coupons.length === 0 || loadingCoupons}
+            disabled={spinning || coupons.length === 0 || loadingCoupons || girosHoje >= limiteGiros}
             activeOpacity={0.85}
           >
             {spinning ? (
               <>
                 <ActivityIndicator color={colors.white} size="small" />
                 <Text style={styles.spinButtonText}>Sorteando... ✨</Text>
+              </>
+            ) : girosHoje >= limiteGiros ? (
+              <>
+                <Text style={styles.spinButtonEmoji}>🧸</Text>
+                <Text style={styles.spinButtonText}>Limite diário atingido!</Text>
               </>
             ) : (
               <>
@@ -259,6 +343,16 @@ export default function RoletaScreen() {
             )}
           </TouchableOpacity>
         </Animated.View>
+
+        {/* ── Botão Histórico ── */}
+        <TouchableOpacity
+          style={styles.historyButton}
+          onPress={() => setHistoryModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.historyButtonEmoji}>🎒</Text>
+          <Text style={styles.historyButtonText}>Meus Mimos</Text>
+        </TouchableOpacity>
 
         {/* ── Decorações fundo ── */}
         <DecorationRow
@@ -339,6 +433,63 @@ export default function RoletaScreen() {
             </TouchableOpacity>
           </Animated.View>
         </View>
+      </Modal>
+
+      {/* ── Modal de Histórico ── */}
+      <Modal
+        visible={historyModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setHistoryModalVisible(false)}
+      >
+        <SafeAreaView style={styles.historyModalSafe}>
+          <View style={styles.historyModalHeader}>
+            <Text style={styles.historyModalTitle}>🎒 Meus Mimos</Text>
+            <TouchableOpacity onPress={() => setHistoryModalVisible(false)} style={styles.historyCloseIcon}>
+              <Ionicons name="close" size={28} color={colors.textDark} />
+            </TouchableOpacity>
+          </View>
+
+          {drawnMimos.length === 0 ? (
+            <View style={styles.historyEmpty}>
+              <Text style={{ fontSize: 40, marginBottom: spacing.sm }}>🧸</Text>
+              <Text style={styles.historyEmptyText}>Você ainda não tem mimos na mochila!</Text>
+            </View>
+          ) : (
+            <ScrollView contentContainerStyle={styles.historyScroll}>
+              {drawnMimos.map((item, index) => {
+                const now = new Date();
+                const exp = new Date(item.expirationDate);
+                const isExpired = now > exp;
+                const dateStr = exp.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+
+                return (
+                  <FofoCard
+                    key={`${item.id}-${index}`}
+                    backgroundColor={isExpired ? '#F0F0F0' : colors.backgroundMint}
+                    style={[styles.historyCard, isExpired && { opacity: 0.7 }]}
+                  >
+                    <View style={styles.historyCardRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.historyCardTitle, isExpired && { color: colors.textMedium, textDecorationLine: 'line-through' }]}>
+                          {item.title}
+                        </Text>
+                        <Text style={styles.historyCardDesc} numberOfLines={2}>
+                          {item.description}
+                        </Text>
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: isExpired ? '#E0E0E0' : colors.successMint }]}>
+                        <Text style={[styles.statusBadgeText, isExpired && { color: colors.textMedium }]}>
+                          {isExpired ? 'Expirado' : `Válido até ${dateStr}`}
+                        </Text>
+                      </View>
+                    </View>
+                  </FofoCard>
+                );
+              })}
+            </ScrollView>
+          )}
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -596,5 +747,112 @@ const styles = StyleSheet.create({
     color: colors.kuromiPurple,
     fontWeight: '600',
     textDecorationLine: 'underline',
+  },
+
+  // Indicador de giros
+  girosIndicator: {
+    backgroundColor: colors.cardWhite,
+    borderRadius: borderRadius.pill,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    borderWidth: 1.5,
+    borderColor: colors.cardBorder,
+  },
+  girosText: {
+    fontSize: 13,
+    color: colors.textMedium,
+    fontWeight: '600',
+  },
+
+  // Botão Histórico
+  historyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.cardWhite,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.pill,
+    marginTop: spacing.md,
+    ...shadows.soft,
+  },
+  historyButtonEmoji: {
+    fontSize: 18,
+    marginRight: spacing.sm,
+  },
+  historyButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.kuromiPurple,
+  },
+
+  // Modal Histórico
+  historyModalSafe: {
+    flex: 1,
+    backgroundColor: colors.backgroundCream,
+  },
+  historyModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderColor: colors.cardBorder,
+    backgroundColor: colors.cardWhite,
+  },
+  historyModalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.textDark,
+  },
+  historyCloseIcon: {
+    padding: spacing.xs,
+  },
+  historyScroll: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
+  historyEmpty: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  historyEmptyText: {
+    fontSize: 16,
+    color: colors.textMedium,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  historyCard: {
+    marginBottom: spacing.md,
+    padding: spacing.md,
+  },
+  historyCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  historyCardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.textDark,
+    marginBottom: 4,
+  },
+  historyCardDesc: {
+    fontSize: 13,
+    color: colors.textMedium,
+  },
+  statusBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: borderRadius.md,
+    marginLeft: spacing.sm,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.textDark,
   },
 });
