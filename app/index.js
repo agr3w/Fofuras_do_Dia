@@ -17,12 +17,15 @@ import {
   Modal,
   TextInput,
   Dimensions,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import DecorationRow from '../components/DecorationRow';
 import FofoCard from '../components/FofoCard';
 import { colors, spacing, borderRadius, shadows, typography } from '../theme/theme';
+import { readCache, STORAGE_KEYS, syncData } from '../services/syncService';
+// IMPORT DESATIVADO TEMPORARIAMENTE: Expo Go no Android (SDK 53+) dá crash com expo-notifications
+// import { requestPermissionsAsync, scheduleDailyNotification } from '../services/notificationService';
 
 const { width } = Dimensions.get('window');
 
@@ -44,6 +47,28 @@ export default function HomeScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    async function initApp() {
+      // 1. Sincroniza silenciosamente em background (offline-first)
+      await syncData();
+
+      // 2. Notificações desativadas temporariamente no Expo Go
+      /*
+      const hasPermission = await requestPermissionsAsync();
+      if (hasPermission) {
+        const settings = await readCache(STORAGE_KEYS.SETTINGS);
+        if (settings && settings.notificationHour !== undefined) {
+          await scheduleDailyNotification(
+            settings.notificationHour,
+            settings.notificationMinute,
+            settings.notificationMessage
+          );
+        }
+      }
+      */
+    }
+
+    initApp();
+
     // Entrada suave
     Animated.parallel([
       Animated.timing(fadeAnim, {

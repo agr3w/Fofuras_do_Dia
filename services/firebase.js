@@ -4,6 +4,9 @@
 //  ⚠️  Para ativar: copie .env.example para .env e
 //  preencha com as suas credenciais do Firebase Console.
 //  https://console.firebase.google.com
+//
+//  💾  Persistência local ativada: o Firestore guarda uma
+//  cópia dos dados no disco para funcionar offline.
 // ============================================================
 
 import { getApp, getApps, initializeApp } from "firebase/app";
@@ -29,6 +32,8 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 // Instância do Firestore (banco de dados)
+// Como o React Native não suporta IndexedDB, usamos o cache padrão de memória.
+// A nossa persistência offline é garantida pelo AsyncStorage (syncService).
 const db = getFirestore(app);
 
 export { app, db };
