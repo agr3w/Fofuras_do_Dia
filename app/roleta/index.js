@@ -197,19 +197,30 @@ export default function RoletaScreen() {
 
       const newHistory = [drawnCoupon, ...drawnMimos];
       setDrawnMimos(newHistory);
-      await AsyncStorage.setItem(STORAGE_KEYS.DRAWN_MIMOS, JSON.stringify(newHistory));
 
+      // Salva localmente (try/catch: Não crasha se AsyncStorage falhar)
+      try {
+        await AsyncStorage.setItem(STORAGE_KEYS.DRAWN_MIMOS, JSON.stringify(newHistory));
+      } catch (e) {
+        console.warn('[Roleta] AsyncStorage indisponível (módulo nativo):', e.message);
+      }
+
+      // Tenta salvar online (falha silenciosa se offline)
       try {
         await addDoc(collection(db, 'user_history'), drawnCoupon);
       } catch (e) {
         console.warn('[Roleta] Erro ao salvar histórico online:', e.message);
       }
 
-      // Incrementa giros do dia
+      // Incrementa giros do dia (try/catch: não crasha se AsyncStorage falhar)
       const newCount = girosHoje + 1;
       setGirosHoje(newCount);
-      const today = new Date().toISOString().slice(0, 10);
-      await AsyncStorage.setItem('@giros', JSON.stringify({ date: today, count: newCount }));
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        await AsyncStorage.setItem('@giros', JSON.stringify({ date: today, count: newCount }));
+      } catch (e) {
+        console.warn('[Roleta] Não foi possível salvar contador de giros:', e.message);
+      }
 
       // Anima abertura do modal
       modalScale.setValue(0.6);
@@ -347,11 +358,28 @@ export default function RoletaScreen() {
         {/* ── Botão Histórico ── */}
         <TouchableOpacity
           style={styles.historyButton}
-          onPress={() => setHistoryModalVisible(true)}
+          onPress={async () => {
+            // Relê o histórico do AsyncStorage antes de abrir o modal
+            try {
+              const raw = await AsyncStorage.getItem(STORAGE_KEYS.DRAWN_MIMOS);
+              if (raw) setDrawnMimos(JSON.parse(raw));
+            } catch (_) {}
+            setHistoryModalVisible(true);
+          }}
           activeOpacity={0.8}
         >
-          <Text style={styles.historyButtonEmoji}>🎒</Text>
-          <Text style={styles.historyButtonText}>Meus Mimos</Text>
+          <View style={styles.historyButtonInner}>
+            <Text style={styles.historyButtonEmoji}>🎒</Text>
+            <View>
+              <Text style={styles.historyButtonText}>Meus Mimos</Text>
+              <Text style={styles.historyButtonSub}>
+                {drawnMimos.length > 0
+                  ? `${drawnMimos.filter(m => new Date() <= new Date(m.expirationDate)).length} válido${drawnMimos.filter(m => new Date() <= new Date(m.expirationDate)).length !== 1 ? 's' : ''} de ${drawnMimos.length}`
+                  : 'Nenhum mimo ainda'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.kuromiPurple} style={{ marginLeft: 'auto' }} />
+          </View>
         </TouchableOpacity>
 
         {/* ── Decorações fundo ── */}
@@ -443,8 +471,25 @@ export default function RoletaScreen() {
         onRequestClose={() => setHistoryModalVisible(false)}
       >
         <SafeAreaView style={styles.historyModalSafe}>
+          {/* Header da carteira */}
           <View style={styles.historyModalHeader}>
-            <Text style={styles.historyModalTitle}>🎒 Meus Mimos</Text>
+            <View>
+              <Text style={styles.historyModalTitle}>🎒 Minha Carteira de Mimos</Text>
+              {drawnMimos.length > 0 && (
+                <View style={styles.historyStatsRow}>
+                  <View style={[styles.historyStatBadge, { backgroundColor: '#D4EDDA' }]}>
+                    <Text style={[styles.historyStatText, { color: '#2D6A4F' }]}>
+                      ✔ {drawnMimos.filter(m => new Date() <= new Date(m.expirationDate)).length} válidos
+                    </Text>
+                  </View>
+                  <View style={[styles.historyStatBadge, { backgroundColor: '#E9E9E9' }]}>
+                    <Text style={[styles.historyStatText, { color: colors.textMedium }]}>
+                      ⏳ {drawnMimos.filter(m => new Date() > new Date(m.expirationDate)).length} expirados
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
             <TouchableOpacity onPress={() => setHistoryModalVisible(false)} style={styles.historyCloseIcon}>
               <Ionicons name="close" size={28} color={colors.textDark} />
             </TouchableOpacity>
@@ -452,41 +497,140 @@ export default function RoletaScreen() {
 
           {drawnMimos.length === 0 ? (
             <View style={styles.historyEmpty}>
-              <Text style={{ fontSize: 40, marginBottom: spacing.sm }}>🧸</Text>
-              <Text style={styles.historyEmptyText}>Você ainda não tem mimos na mochila!</Text>
+              <Text style={{ fontSize: 64, marginBottom: spacing.md }}>🎒</Text>
+              <Text style={styles.historyEmptyTitle}>Carteira vazia!</Text>
+              <Text style={styles.historyEmptyText}>
+                {'Gire a roleta para ganhar\nseus primeiros mimos. 🎁'}
+              </Text>
+              <TouchableOpacity
+                style={styles.historyEmptyBtn}
+                onPress={() => setHistoryModalVisible(false)}
+              >
+                <Text style={styles.historyEmptyBtnText}>Ir girar agora! 🍡</Text>
+              </TouchableOpacity>
             </View>
           ) : (
-            <ScrollView contentContainerStyle={styles.historyScroll}>
+            <ScrollView
+              contentContainerStyle={styles.historyScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.historyScrollHint}>
+                Deslize para ver todos os seus mimos ✨
+              </Text>
               {drawnMimos.map((item, index) => {
                 const now = new Date();
                 const exp = new Date(item.expirationDate);
+                const drawn = new Date(item.drawnDate);
                 const isExpired = now > exp;
+
+                // Calcula dias restantes
+                const diffMs = exp.getTime() - now.getTime();
+                const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
                 const dateStr = exp.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                const drawnStr = drawn.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+
+                // Cores do card baseadas no estado
+                const cardBg = isExpired ? '#F5F5F5' : (index % 2 === 0 ? '#E8F8EF' : '#FFF0F5');
+                const accentColor = isExpired ? '#BDBDBD' : (index % 2 === 0 ? '#2D9B68' : colors.kuromiPurple);
+                const badgeBg = isExpired ? '#E0E0E0' : (index % 2 === 0 ? '#C8F0DC' : '#FFD6E8');
+                const badgeText = isExpired ? colors.textMedium : (index % 2 === 0 ? '#1A7A4E' : '#9C3D69');
 
                 return (
-                  <FofoCard
+                  <View
                     key={`${item.id}-${index}`}
-                    backgroundColor={isExpired ? '#F0F0F0' : colors.backgroundMint}
-                    style={[styles.historyCard, isExpired && { opacity: 0.7 }]}
+                    style={[
+                      styles.historyCard,
+                      { backgroundColor: cardBg },
+                      isExpired && styles.historyCardExpired,
+                    ]}
                   >
-                    <View style={styles.historyCardRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.historyCardTitle, isExpired && { color: colors.textMedium, textDecorationLine: 'line-through' }]}>
-                          {item.title}
-                        </Text>
-                        <Text style={styles.historyCardDesc} numberOfLines={2}>
+                    {/* Faixa colorida lateral */}
+                    <View style={[styles.historyCardStripe, { backgroundColor: accentColor }]} />
+
+                    <View style={styles.historyCardContent}>
+                      {/* Linha superior: emoji/título + badge */}
+                      <View style={styles.historyCardTopRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.historyCardTitle,
+                              isExpired && styles.historyCardTitleExpired,
+                            ]}
+                            numberOfLines={2}
+                          >
+                            {item.title}
+                          </Text>
+                        </View>
+                        {/* Badge de status */}
+                        <View style={[styles.statusBadge, { backgroundColor: badgeBg }]}>
+                          <Text style={[styles.statusBadgeText, { color: badgeText }]}>
+                            {isExpired
+                              ? '❌ Expirado'
+                              : daysLeft === 0
+                              ? '⚠️ Hoje!'
+                              : daysLeft === 1
+                              ? '⏰ Amanhã!'
+                              : `✅ ${daysLeft}d`}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Descrição */}
+                      {item.description ? (
+                        <Text
+                          style={[
+                            styles.historyCardDesc,
+                            isExpired && { color: colors.textLight },
+                          ]}
+                          numberOfLines={2}
+                        >
                           {item.description}
                         </Text>
+                      ) : null}
+
+                      {/* Linha inferior: datas */}
+                      <View style={styles.historyCardFooter}>
+                        <View style={styles.historyCardDateItem}>
+                          <Ionicons name="gift-outline" size={12} color={isExpired ? colors.textLight : accentColor} />
+                          <Text style={[styles.historyCardDateText, isExpired && { color: colors.textLight }]}>
+                            Sorteado em {drawnStr}
+                          </Text>
+                        </View>
+                        <View style={styles.historyCardDateItem}>
+                          <Ionicons name="calendar-outline" size={12} color={isExpired ? colors.textLight : accentColor} />
+                          <Text style={[styles.historyCardDateText, isExpired && { color: colors.textLight }]}>
+                            {isExpired ? `Expirou em ${dateStr}` : `Válido até ${dateStr}`}
+                          </Text>
+                        </View>
                       </View>
-                      <View style={[styles.statusBadge, { backgroundColor: isExpired ? '#E0E0E0' : colors.successMint }]}>
-                        <Text style={[styles.statusBadgeText, isExpired && { color: colors.textMedium }]}>
-                          {isExpired ? 'Expirado' : `Válido até ${dateStr}`}
-                        </Text>
-                      </View>
+
+                      {/* Barra de progresso da validade (só para válidos) */}
+                      {!isExpired && item.validadeDias && (
+                        <View style={styles.validityBar}>
+                          <View
+                            style={[
+                              styles.validityBarFill,
+                              {
+                                width: `${Math.max(5, Math.min(100, (daysLeft / item.validadeDias) * 100))}%`,
+                                backgroundColor: daysLeft <= 1 ? '#FF6B6B' : accentColor,
+                              },
+                            ]}
+                          />
+                        </View>
+                      )}
                     </View>
-                  </FofoCard>
+                  </View>
                 );
               })}
+
+              {/* Rodapé informativo */}
+              <View style={styles.historyFooterNote}>
+                <Ionicons name="information-circle-outline" size={14} color={colors.textLight} />
+                <Text style={styles.historyFooterNoteText}>
+                  Mimos são sincronizados automaticamente quando você estiver online. 📶
+                </Text>
+              </View>
             </ScrollView>
           )}
         </SafeAreaView>
@@ -768,91 +912,212 @@ const styles = StyleSheet.create({
 
   // Botão Histórico
   historyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: colors.cardWhite,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.pill,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
     marginTop: spacing.md,
+    width: width - spacing.lg * 2,
+    borderWidth: 1.5,
+    borderColor: colors.cardBorder,
     ...shadows.soft,
   },
+  historyButtonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   historyButtonEmoji: {
-    fontSize: 18,
-    marginRight: spacing.sm,
+    fontSize: 28,
   },
   historyButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: colors.kuromiPurple,
+  },
+  historyButtonSub: {
+    fontSize: 12,
+    color: colors.textMedium,
+    marginTop: 2,
   },
 
   // Modal Histórico
   historyModalSafe: {
     flex: 1,
-    backgroundColor: colors.backgroundCream,
+    backgroundColor: '#FAFAFA',
   },
   historyModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     padding: spacing.lg,
+    paddingBottom: spacing.md,
     borderBottomWidth: 1,
     borderColor: colors.cardBorder,
     backgroundColor: colors.cardWhite,
   },
   historyModalTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: colors.textDark,
+    marginBottom: 6,
+  },
+  historyStatsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: 4,
+  },
+  historyStatBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: borderRadius.pill,
+  },
+  historyStatText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   historyCloseIcon: {
     padding: spacing.xs,
+    marginTop: 2,
   },
   historyScroll: {
-    padding: spacing.lg,
+    padding: spacing.md,
     paddingBottom: spacing.xxl,
+    gap: spacing.md,
+  },
+  historyScrollHint: {
+    fontSize: 12,
+    color: colors.textLight,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginBottom: spacing.xs,
   },
   historyEmpty: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,
+    gap: spacing.sm,
   },
-  historyEmptyText: {
-    fontSize: 16,
-    color: colors.textMedium,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  historyCard: {
-    marginBottom: spacing.md,
-    padding: spacing.md,
-  },
-  historyCardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  historyCardTitle: {
-    fontSize: 16,
+  historyEmptyTitle: {
+    fontSize: 22,
     fontWeight: '800',
     color: colors.textDark,
+  },
+  historyEmptyText: {
+    fontSize: 15,
+    color: colors.textMedium,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  historyEmptyBtn: {
+    marginTop: spacing.md,
+    backgroundColor: colors.kuromiPurple,
+    borderRadius: borderRadius.pill,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    ...shadows.soft,
+  },
+  historyEmptyBtnText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.white,
+  },
+
+  // Cards do histórico (design carteira)
+  historyCard: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    ...shadows.light,
+  },
+  historyCardExpired: {
+    opacity: 0.72,
+  },
+  historyCardStripe: {
+    width: 5,
+    borderRadius: 0,
+  },
+  historyCardContent: {
+    flex: 1,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  historyCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
     marginBottom: 4,
   },
-  historyCardDesc: {
-    fontSize: 13,
+  historyCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.textDark,
+    lineHeight: 20,
+  },
+  historyCardTitleExpired: {
     color: colors.textMedium,
+    textDecorationLine: 'line-through',
+  },
+  historyCardDesc: {
+    fontSize: 12,
+    color: colors.textMedium,
+    lineHeight: 17,
+  },
+  historyCardFooter: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: 6,
+  },
+  historyCardDateItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  historyCardDateText: {
+    fontSize: 11,
+    color: colors.textMedium,
+    fontWeight: '500',
+  },
+  validityBar: {
+    height: 4,
+    backgroundColor: '#E0E0E0',
+    borderRadius: borderRadius.pill,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  validityBarFill: {
+    height: 4,
+    borderRadius: borderRadius.pill,
   },
   statusBadge: {
     paddingVertical: 4,
     paddingHorizontal: 8,
-    borderRadius: borderRadius.md,
-    marginLeft: spacing.sm,
+    borderRadius: borderRadius.sm,
+    alignSelf: 'flex-start',
+    flexShrink: 0,
   },
   statusBadgeText: {
     fontSize: 11,
     fontWeight: '800',
-    color: colors.textDark,
+  },
+  historyFooterNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.cardWhite,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  historyFooterNoteText: {
+    flex: 1,
+    fontSize: 11,
+    color: colors.textLight,
+    fontStyle: 'italic',
+    lineHeight: 16,
   },
 });

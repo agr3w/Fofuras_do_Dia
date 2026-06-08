@@ -450,6 +450,12 @@ export default function AdminScreen() {
                           {coupon.description ? (
                             <Text style={styles.couponCardDesc} numberOfLines={2}>{coupon.description}</Text>
                           ) : null}
+                          <View style={styles.couponValidityRow}>
+                            <Ionicons name="time-outline" size={12} color={colors.textLight} />
+                            <Text style={styles.couponValidityText}>
+                              Válido por {coupon.validadeDias || 7} dia{(coupon.validadeDias || 7) !== 1 ? 's' : ''} após sorteio
+                            </Text>
+                          </View>
                         </View>
                         <View style={styles.couponCardActions}>
                           <TouchableOpacity
@@ -759,6 +765,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.xs,
     alignItems: 'center',
+  },
+  couponValidityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  couponValidityText: {
+    fontSize: 11,
+    color: colors.textLight,
+    fontStyle: 'italic',
   },
   iconButton: {
     padding: spacing.sm,
