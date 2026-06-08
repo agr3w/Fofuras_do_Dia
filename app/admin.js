@@ -18,7 +18,7 @@ import {
   Modal,
   FlatList,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../services/firebase';
 import { collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -459,16 +459,16 @@ export default function AdminScreen() {
                         </View>
                         <View style={styles.couponCardActions}>
                           <TouchableOpacity
-                            style={[styles.iconButton, { backgroundColor: colors.cardWhite }]}
+                            style={[styles.iconButton, { backgroundColor: '#EDE7F6' }]}
                             onPress={() => handleEditCoupon(coupon)}
                           >
-                            <Ionicons name="pencil" size={18} color={colors.textDark} />
+                            <MaterialCommunityIcons name="pencil" size={18} color={colors.kuromiPurple} />
                           </TouchableOpacity>
                           <TouchableOpacity
                             style={[styles.iconButton, { backgroundColor: '#FFEBEE' }]}
                             onPress={() => handleDeleteCoupon(coupon)}
                           >
-                            <Ionicons name="trash" size={18} color={colors.heartRed} />
+                            <MaterialCommunityIcons name="trash-can-outline" size={18} color="#E57373" />
                           </TouchableOpacity>
                         </View>
                       </View>

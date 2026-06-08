@@ -1,61 +1,89 @@
 // ============================================================
 //  COMPONENTE: DecorationRow
-//  Fileira de emojis fofos com animação de "balanço" suave.
-//  Coloca sapinhos 🐸, ursinhos 🧸 e outros personagens
-//  decorativos em qualquer tela.
+//  Fileira decorativa animada com "balanço" suave.
+//  Suporta dois modos:
+//    • emojis  — array de strings (retrocompatível)
+//    • items   — array de { type: 'emoji'|'image', value, source, size }
 // ============================================================
 
 import React, { useEffect, useRef } from 'react';
-import { View, Text, Animated, StyleSheet } from 'react-native';
+import { View, Text, Image, Animated, StyleSheet } from 'react-native';
 
 /**
  * @param {object}   props
- * @param {string[]} [props.emojis]     — array de emojis para exibir
- * @param {number}   [props.fontSize]   — tamanho dos emojis (default: 32)
- * @param {object}   [props.style]      — estilos extras no container
+ * @param {string[]} [props.emojis]   — array de emojis (modo legado)
+ * @param {Array}    [props.items]    — array de { type, value?, source?, size? }
+ * @param {number}   [props.fontSize] — tamanho dos emojis (default: 32)
+ * @param {number}   [props.imageSize]— tamanho das imagens (default: 40)
+ * @param {object}   [props.style]    — estilos extras no container
+ *
+ * @example
+ * // Modo legado (emojis)
+ * <DecorationRow emojis={['🐸', '🌸', '🧸']} fontSize={28} />
+ *
+ * // Modo rico (misto)
+ * <DecorationRow items={[
+ *   { type: 'image', source: require('../assets/images/sanrio/keroppi.png'), size: 40 },
+ *   { type: 'emoji', value: '🌸' },
+ *   { type: 'image', source: require('../assets/images/sanrio/bear.png'), size: 40 },
+ * ]} />
  */
 export default function DecorationRow({
-  emojis = ['🐸', '🧸', '🌸', '🐸', '🧸', '💕', '🌸'],
+  emojis,
+  items,
   fontSize = 32,
+  imageSize = 40,
   style,
 }) {
-  // Cria um valor animado por emoji para o efeito de balanço
-  const anims = useRef(emojis.map(() => new Animated.Value(0))).current;
+  // Normaliza para um único array interno
+  const resolvedItems = items
+    ? items
+    : (emojis || ['🐸', '🧸', '🌸', '🐸', '🧸', '💕', '🌸']).map((e) => ({
+        type: 'emoji',
+        value: e,
+      }));
+
+  const anims = useRef(resolvedItems.map(() => new Animated.Value(0))).current;
 
   useEffect(() => {
     const animations = anims.map((anim, i) =>
       Animated.loop(
         Animated.sequence([
           Animated.delay(i * 150),
-          Animated.timing(anim, {
-            toValue: 1,
-            duration: 900,
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim, {
-            toValue: -1,
-            duration: 900,
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim, {
-            toValue: 0,
-            duration: 900,
-            useNativeDriver: true,
-          }),
+          Animated.timing(anim, { toValue: 1,  duration: 900, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: -1, duration: 900, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 0,  duration: 900, useNativeDriver: true }),
         ])
       )
     );
-
     Animated.parallel(animations).start();
   }, []);
 
   return (
     <View style={[styles.row, style]}>
-      {emojis.map((emoji, i) => {
+      {resolvedItems.map((item, i) => {
         const rotate = anims[i].interpolate({
           inputRange: [-1, 0, 1],
           outputRange: ['-12deg', '0deg', '12deg'],
         });
+
+        if (item.type === 'image') {
+          const size = item.size ?? imageSize;
+          return (
+            <Animated.View
+              key={i}
+              style={[styles.imageWrap, { transform: [{ rotate }] }]}
+            >
+              <Image
+                source={item.source}
+                style={{ width: size, height: size }}
+                resizeMode="contain"
+              />
+            </Animated.View>
+          );
+        }
+
+        // Padrão: emoji como texto
         return (
           <Animated.Text
             key={i}
@@ -64,7 +92,7 @@ export default function DecorationRow({
               { fontSize, transform: [{ rotate }] },
             ]}
           >
-            {emoji}
+            {item.value ?? item}
           </Animated.Text>
         );
       })}
@@ -82,5 +110,10 @@ const styles = StyleSheet.create({
   },
   emoji: {
     marginHorizontal: 4,
+  },
+  imageWrap: {
+    marginHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

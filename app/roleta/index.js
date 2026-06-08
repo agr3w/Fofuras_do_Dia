@@ -8,6 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
@@ -431,7 +432,15 @@ export default function RoletaScreen() {
               style={styles.modalDeco}
             />
 
-            <Text style={styles.modalWinEmoji}>🎁</Text>
+            {/* Imagem fofa do prêmio (kuromi) */}
+            <Animated.Image
+              source={require('../../assets/images/sanrio/kuromi.png')}
+              style={[
+                styles.modalWinImage,
+                { transform: [{ scale: modalScale }] },
+              ]}
+              resizeMode="contain"
+            />
             <Text style={styles.modalWinLabel}>Você ganhou!</Text>
 
             <FofoCard
@@ -443,8 +452,13 @@ export default function RoletaScreen() {
               {winner?.description ? (
                 <Text style={styles.modalCouponDesc}>{winner?.description}</Text>
               ) : null}
+              {/* Selo com imagem heart */}
               <View style={styles.modalSeal}>
-                <Text style={styles.modalSealEmoji}>💜</Text>
+                <Image
+                  source={require('../../assets/images/sanrio/heart.png')}
+                  style={styles.modalSealImage}
+                  resizeMode="contain"
+                />
               </View>
             </FofoCard>
 
@@ -818,8 +832,9 @@ const styles = StyleSheet.create({
   modalDeco: {
     marginBottom: spacing.sm,
   },
-  modalWinEmoji: {
-    fontSize: 60,
+  modalWinImage: {
+    width: 90,
+    height: 90,
     marginBottom: spacing.sm,
   },
   modalWinLabel: {
@@ -858,8 +873,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     ...shadows.soft,
   },
-  modalSealEmoji: {
-    fontSize: 22,
+  modalSealImage: {
+    width: 28,
+    height: 28,
   },
   modalNote: {
     fontSize: 13,

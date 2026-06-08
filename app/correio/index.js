@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -170,7 +171,11 @@ export default function CorreioScreen() {
         >
           {/* Aba superior da carta */}
           <View style={styles.letterTop}>
-            <Text style={styles.letterTopEmoji}>💌</Text>
+            <Image
+              source={require('../../assets/images/sanrio/envelope_icon.png')}
+              style={styles.letterTopImage}
+              resizeMode="contain"
+            />
             <Text style={styles.letterTopTitle}>Uma cartinha pra Rana</Text>
             <Text style={styles.letterDate}>
               {new Date().toLocaleDateString("pt-BR", {
@@ -208,7 +213,19 @@ export default function CorreioScreen() {
                   <Text style={styles.signatureText}>
                     {currentMsg.sender ?? "Com amor 💕"}
                   </Text>
-                  <Text style={styles.signatureEmoji}>🐸🧸</Text>
+                  {/* Keroppi + Bear como assinatura visual */}
+                  <View style={styles.signatureImages}>
+                    <Image
+                      source={require('../../assets/images/sanrio/keroppi.png')}
+                      style={styles.signatureImage}
+                      resizeMode="contain"
+                    />
+                    <Image
+                      source={require('../../assets/images/sanrio/bear.png')}
+                      style={styles.signatureImage}
+                      resizeMode="contain"
+                    />
+                  </View>
                 </View>
               </Animated.View>
             )}
@@ -299,13 +316,16 @@ const styles = StyleSheet.create({
   letterTop: {
     backgroundColor: colors.primaryAccent,
     alignItems: "center",
+    justifyContent: "center",
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
     borderBottomWidth: 2,
     borderBottomColor: colors.envelopeBorder,
+    gap: 4,
   },
-  letterTopEmoji: {
-    fontSize: 40,
+  letterTopImage: {
+    width: 56,
+    height: 56,
     marginBottom: 4,
   },
   letterTopTitle: {
@@ -372,8 +392,14 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     fontWeight: "600",
   },
-  signatureEmoji: {
-    fontSize: 22,
+  signatureImages: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 2,
+  },
+  signatureImage: {
+    width: 28,
+    height: 28,
   },
 
   // Badge placeholder / paginação
